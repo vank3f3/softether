@@ -1,27 +1,26 @@
-FROM alpine:3.4
+FROM ubuntu:16.04
 
-ARG BUILD_PKG="tar gcc git curl expat libssh2 pcre libc-dev readline-dev zlib-dev openssl-dev ncurses-dev make"
-ARG TEMP_DIR="/tmp/softethervpn"
-ARG VERSION=4.27-9667-beta
+#ENV VERSION v4.22-9634-beta-2016.11.27
+ENV VERSION v4.24-9651-beta-2017.10.23
+WORKDIR /usr/local/vpnserver
 
-LABEL description="SoftEtherVPN Server"
-LABEL version="${VERSION}"
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && \
+    apt-get -y -q install iptables gcc make wget dnsmasq && \
+    apt-get clean && \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
+    wget http://www.softether-download.com/files/softether/${VERSION}-tree/Linux/SoftEther_VPN_Server/64bit_-_Intel_x64_or_AMD64/softether-vpnserver-${VERSION}-linux-x64-64bit.tar.gz -O /tmp/softether-vpnserver.tar.gz &&\
+    tar -xzvf /tmp/softether-vpnserver.tar.gz -C /usr/local/ && \
+    rm /tmp/softether-vpnserver.tar.gz && \
+    make i_read_and_agree_the_license_agreement && \
+    apt-get purge -y -q --auto-remove gcc make wget
 
-ENV LANG=en_US.UTF-8
-RUN set -e \
-    && apk add --no-cache ${BUILD_PKG} iptables iproute2 readline ncurses zlib \
-    && mkdir -p ${TEMP_DIR} \
-    && git clone --branch "v${VERSION}" --depth 1 https://github.com/SoftEtherVPN/SoftEtherVPN_Stable.git ${TEMP_DIR} \
-    && cd ${TEMP_DIR} \
-    && cp src/makefiles/linux_64bit.mak Makefile \
-    && make \
-    && make install \
-    && cd - \
-    && apk del --purge ${BUILD_PKG} \
-    && rm -rf /var/cache/apk/* ${TEMP_DIR}
+RUN update-rc.d -f dnsmasq remove
+ADD entrypoint.sh /
+ADD dnsmasq.conf /etc/
+ADD vpn_server.config /usr/local/vpnserver/
+RUN chmod 755 /entrypoint.sh
 
-COPY entrypoint.sh /entrypoint.sh
+EXPOSE 443/tcp 992/tcp 1194/tcp 1194/udp 5555/tcp 500/udp 4500/udp 1701/udp
 
-EXPOSE 1701/udp 1194/tcp 1194/udp 443/tcp 4500/udp 500/udp 5555/tcp 992/tcp
-
-ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
